@@ -5,6 +5,7 @@ import { ingestSchema, insertEvents, type IngestEvent } from "../lib/ingest";
 
 const valid: IngestEvent = {
   session_id: "s_abc",
+  user_id: "u_1",
   event_type: "accepted",
   session_type: "call",
   platform: "android",
@@ -32,6 +33,7 @@ describe("ingest schema", () => {
     expect(ingestSchema.safeParse(noTs).success).toBe(false);
     expect(ingestSchema.safeParse({ ...valid, ts: -5 }).success).toBe(false);
     expect(ingestSchema.safeParse({ ...valid, ts: 1.5 }).success).toBe(false);
+    expect(ingestSchema.safeParse({ ...valid, user_id: "" }).success).toBe(false);
   });
 });
 

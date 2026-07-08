@@ -8,6 +8,7 @@ export const SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS events (
     id           INTEGER PRIMARY KEY,
     session_id   TEXT NOT NULL,
+    user_id      TEXT NOT NULL,
     event_type   TEXT NOT NULL,
     session_type TEXT NOT NULL,
     platform     TEXT NOT NULL,

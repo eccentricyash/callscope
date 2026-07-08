@@ -17,12 +17,24 @@ const A = Date.UTC(2026, 5, 30); // anchor = latest event ts
 
 interface Row {
   session_id: string;
+  user_id: string;
   event_type: string;
   session_type: string;
   platform: string;
   ts: number;
   payload: string | null;
 }
+
+// who owns which session: u1 is a heavy user, u4 only shows up 40 days back
+const USER_BY_SESSION: Record<string, string> = {
+  s1: "u1",
+  s2: "u2",
+  s3: "u1",
+  s4: "u3",
+  s5: "u1",
+  s6: "u2",
+  s7: "u4",
+};
 
 const rows: Row[] = [];
 function ev(
@@ -34,6 +46,7 @@ function ev(
 ) {
   rows.push({
     session_id,
+    user_id: USER_BY_SESSION[session_id],
     event_type,
     session_type,
     platform: "android",
@@ -56,6 +69,7 @@ ev("s2", "call", "initiated", s2);
 ev("s2", "call", "ring_started", s2 + 1_000);
 ev("s2", "call", "accepted", s2 + 11_000);
 ev("s2", "call", "connected", s2 + 12_000);
+ev("s2", "call", "reconnect", s2 + 60_000, { attempt: 1 });
 ev("s2", "call", "ended", s2 + 132_000, { reason: "network_lost" });
 
 // s3: rang, nobody answered
@@ -95,8 +109,8 @@ beforeAll(() => {
   const db = new Database(dbPath);
   db.exec(SCHEMA_SQL);
   const insert = db.prepare(
-    `INSERT INTO events (session_id, event_type, session_type, platform, ts, payload)
-     VALUES (@session_id, @event_type, @session_type, @platform, @ts, @payload)`,
+    `INSERT INTO events (session_id, user_id, event_type, session_type, platform, ts, payload)
+     VALUES (@session_id, @user_id, @event_type, @session_type, @platform, @ts, @payload)`,
   );
   for (const r of rows) insert.run(r);
   db.close();
@@ -148,6 +162,32 @@ describe("getMetrics — 7 day window", () => {
     expect(sum("call")).toBe(4);
     expect(sum("meet")).toBe(1);
     expect(sum("screenshare")).toBe(1);
+  });
+});
+
+describe("getMetrics — usage and health kpis", () => {
+  it("counts distinct active users", () => {
+    expect(getMetrics(7).kpis.activeUsers).toBe(3); // u1, u2, u3
+    expect(getMetrics(90).kpis.activeUsers).toBe(4); // + u4
+  });
+
+  it("sums time spent in sessions", () => {
+    // 60s + 120s + (6h - 5s) = 21,775,000 ms
+    expect(getMetrics(7).kpis.totalConnectedMs).toBe(21_775_000);
+  });
+
+  it("computes abnormal end rate and reconnect rate", () => {
+    const m = getMetrics(7);
+    expect(m.kpis.abnormalEndRate).toBeCloseTo(1 / 3); // s2 network_lost of 3 ended
+    expect(m.kpis.reconnectsPer100).toBeCloseTo(100 / 3); // 1 reconnect / 3 connected
+  });
+
+  it("builds daily user and minute trends", () => {
+    const m = getMetrics(7);
+    expect(m.dailyUsers).toHaveLength(3);
+    expect(m.dailyUsers.reduce((s, d) => s + d.value, 0)).toBe(6); // 2 + 2 + 2
+    const totalMin = m.dailyMinutes.reduce((s, d) => s + d.value, 0);
+    expect(totalMin).toBeCloseTo(21_775_000 / 60_000, 1);
   });
 });
 

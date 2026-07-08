@@ -21,6 +21,7 @@ export const EVENT_TYPES = [
 
 export const eventSchema = z.object({
   session_id: z.string().min(1).max(128),
+  user_id: z.string().min(1).max(128),
   event_type: z.enum(EVENT_TYPES),
   session_type: z.enum(["call", "meet", "screenshare"]),
   platform: z.enum(["android", "ios", "windows", "macos", "web"]),
@@ -37,13 +38,14 @@ export type IngestEvent = z.infer<typeof eventSchema>;
 
 export function insertEvents(db: Database.Database, events: IngestEvent[]): number {
   const insert = db.prepare(
-    `INSERT INTO events (session_id, event_type, session_type, platform, ts, payload)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO events (session_id, user_id, event_type, session_type, platform, ts, payload)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
   const run = db.transaction((batch: IngestEvent[]) => {
     for (const e of batch) {
       insert.run(
         e.session_id,
+        e.user_id,
         e.event_type,
         e.session_type,
         e.platform,

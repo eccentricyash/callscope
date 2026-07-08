@@ -97,6 +97,7 @@ const HOUR_WEIGHTS = [
 
 interface Event {
   session_id: string;
+  user_id: string;
   event_type: string;
   session_type: string;
   platform: string;
@@ -104,16 +105,39 @@ interface Event {
   payload: string | null;
 }
 
+/*
+ * Simulated user base. Each user has a join day (so the pool grows over the
+ * window — new signups) and an engagement weight (a few heavy users, a long
+ * tail of light ones), which is what real DAU curves are made of.
+ */
+const USER_COUNT = 420;
+const USERS = Array.from({ length: USER_COUNT }, (_, i) => ({
+  id: `u_${(i + 1).toString(36)}`,
+  joinDay: Math.floor(rand() * DAYS * 0.85),
+  weight: lognormal(1, 0.9, 0.05, 20),
+}));
+
+function pickUser(dayIndex: number): string {
+  const eligible = USERS.filter((u) => u.joinDay <= dayIndex);
+  let r = rand() * eligible.reduce((s, u) => s + u.weight, 0);
+  for (const u of eligible) {
+    r -= u.weight;
+    if (r <= 0) return u.id;
+  }
+  return eligible[eligible.length - 1].id;
+}
+
 function sessionStartTs(dayStart: number): number {
   const hour = pick(HOUR_WEIGHTS.map((w, h) => [h, w] as [number, number]));
   return dayStart + hour * 3_600_000 + Math.floor(rand() * 3_600_000);
 }
 
-function generateSession(id: string, startTs: number): Event[] {
+function generateSession(id: string, user_id: string, startTs: number): Event[] {
   const type = pick(SESSION_TYPES);
   const platform = pick(PLATFORMS);
   const ev = (event_type: string, ts: number, payload?: object): Event => ({
     session_id: id,
+    user_id,
     event_type,
     session_type: type,
     platform,
@@ -177,8 +201,8 @@ function main() {
   db.exec(SCHEMA_SQL);
 
   const insert = db.prepare(
-    `INSERT INTO events (session_id, event_type, session_type, platform, ts, payload)
-     VALUES (@session_id, @event_type, @session_type, @platform, @ts, @payload)`,
+    `INSERT INTO events (session_id, user_id, event_type, session_type, platform, ts, payload)
+     VALUES (@session_id, @user_id, @event_type, @session_type, @platform, @ts, @payload)`,
   );
 
   const now = Date.now();
@@ -202,7 +226,11 @@ function main() {
     for (let i = 0; i < n; i++) {
       sessionCount++;
       dayEvents.push(
-        ...generateSession(`s_${sessionCount.toString(36)}`, sessionStartTs(dayStart)),
+        ...generateSession(
+          `s_${sessionCount.toString(36)}`,
+          pickUser(DAYS - d),
+          sessionStartTs(dayStart),
+        ),
       );
     }
     insertMany(dayEvents);
