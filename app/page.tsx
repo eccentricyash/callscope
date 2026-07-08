@@ -30,6 +30,19 @@ function signed(n: number, fmt: (abs: number) => string): string {
   return `${n >= 0 ? "+" : "−"}${fmt(Math.abs(n))}`;
 }
 
+/** No delta props at all when there's no previous window to compare against. */
+function deltaProps(
+  value: number | null,
+  fmt: (abs: number) => string,
+  upIsGood = true,
+): { delta?: string; deltaGood?: boolean } {
+  if (value === null) return {};
+  return { delta: signed(value, fmt), deltaGood: upIsGood ? value >= 0 : value <= 0 };
+}
+
+const pct = (v: number) => `${v.toFixed(1)}%`;
+const pts = (v: number) => `${v.toFixed(1)} pts`;
+
 function fmtHours(ms: number): string {
   return `${(ms / 3_600_000).toFixed(1)}h`;
 }
@@ -86,29 +99,25 @@ export default async function Home({
         <StatTile
           label="Active users"
           value={fmtInt(m.kpis.activeUsers)}
-          delta={signed(m.kpis.activeUsersDelta, (v) => `${v.toFixed(1)}%`)}
-          deltaGood={m.kpis.activeUsersDelta >= 0}
+          {...deltaProps(m.kpis.activeUsersDelta, pct)}
           deltaCaption={vs}
         />
         <StatTile
           label="Sessions"
           value={fmtInt(m.kpis.totalSessions)}
-          delta={signed(m.kpis.totalSessionsDelta, (v) => `${v.toFixed(1)}%`)}
-          deltaGood={m.kpis.totalSessionsDelta >= 0}
+          {...deltaProps(m.kpis.totalSessionsDelta, pct)}
           deltaCaption={vs}
         />
         <StatTile
           label="Time in sessions"
           value={fmtHours(m.kpis.totalConnectedMs)}
-          delta={signed(m.kpis.totalConnectedMsDelta, (v) => `${v.toFixed(1)}%`)}
-          deltaGood={m.kpis.totalConnectedMsDelta >= 0}
+          {...deltaProps(m.kpis.totalConnectedMsDelta, pct)}
           deltaCaption={vs}
         />
         <StatTile
           label="Median session length"
           value={fmtDuration(m.kpis.medianDurationMs)}
-          delta={signed(m.kpis.medianDurationDeltaMs, fmtDuration)}
-          deltaGood={m.kpis.medianDurationDeltaMs >= 0}
+          {...deltaProps(m.kpis.medianDurationDeltaMs, fmtDuration)}
           deltaCaption={vs}
         />
       </div>
@@ -162,29 +171,25 @@ export default async function Home({
         <StatTile
           label="Connect success rate"
           value={fmtPct(m.kpis.connectRate)}
-          delta={signed(m.kpis.connectRateDelta, (v) => `${v.toFixed(1)} pts`)}
-          deltaGood={m.kpis.connectRateDelta >= 0}
+          {...deltaProps(m.kpis.connectRateDelta, pts)}
           deltaCaption={vs}
         />
         <StatTile
           label="Median ring → accept"
           value={fmtSeconds(m.kpis.medianRingToAcceptMs)}
-          delta={signed(m.kpis.medianRingToAcceptDeltaMs, fmtSeconds)}
-          deltaGood={m.kpis.medianRingToAcceptDeltaMs <= 0}
+          {...deltaProps(m.kpis.medianRingToAcceptDeltaMs, fmtSeconds, false)}
           deltaCaption={vs}
         />
         <StatTile
           label="Abnormal end rate"
           value={fmtPct(m.kpis.abnormalEndRate)}
-          delta={signed(m.kpis.abnormalEndRateDelta, (v) => `${v.toFixed(1)} pts`)}
-          deltaGood={m.kpis.abnormalEndRateDelta <= 0}
+          {...deltaProps(m.kpis.abnormalEndRateDelta, pts, false)}
           deltaCaption={vs}
         />
         <StatTile
           label="Reconnects / 100 sessions"
           value={m.kpis.reconnectsPer100.toFixed(1)}
-          delta={signed(m.kpis.reconnectsPer100Delta, (v) => v.toFixed(1))}
-          deltaGood={m.kpis.reconnectsPer100Delta <= 0}
+          {...deltaProps(m.kpis.reconnectsPer100Delta, (v) => v.toFixed(1), false)}
           deltaCaption={vs}
         />
       </div>

@@ -9,23 +9,25 @@ import { getDb } from "./db";
 
 export type RangeDays = 7 | 30 | 90;
 
+// deltas are null when the previous window has no data to compare against
+// (e.g. the 90d view on a 90-day dataset) — a delta vs nothing is a lie
 export interface Kpis {
   totalSessions: number;
-  totalSessionsDelta: number; // % vs previous window
+  totalSessionsDelta: number | null; // % vs previous window
   activeUsers: number; // distinct users who started a session
-  activeUsersDelta: number; // %
+  activeUsersDelta: number | null; // %
   totalConnectedMs: number; // summed time actually spent in sessions
-  totalConnectedMsDelta: number; // %
+  totalConnectedMsDelta: number | null; // %
   connectRate: number; // 0..1, connected / initiated
-  connectRateDelta: number; // percentage-point change
+  connectRateDelta: number | null; // percentage-point change
   medianRingToAcceptMs: number;
-  medianRingToAcceptDeltaMs: number;
+  medianRingToAcceptDeltaMs: number | null;
   medianDurationMs: number;
-  medianDurationDeltaMs: number;
+  medianDurationDeltaMs: number | null;
   abnormalEndRate: number; // 0..1, non-hangup ends / ended sessions
-  abnormalEndRateDelta: number; // percentage-point change
+  abnormalEndRateDelta: number | null; // percentage-point change
   reconnectsPer100: number; // reconnect events per 100 connected sessions
-  reconnectsPer100Delta: number;
+  reconnectsPer100Delta: number | null;
 }
 
 export interface DailyVolumeRow {
@@ -187,24 +189,34 @@ export function getMetrics(rangeDays: RangeDays): Metrics {
   const cur = statsForWindow(from, to);
   const prev = statsForWindow(prevFrom, from);
 
+  const hasPrev = prev.total > 0;
   const kpis: Kpis = {
     totalSessions: cur.total,
-    totalSessionsDelta: pctDelta(cur.total, prev.total),
+    totalSessionsDelta: hasPrev ? pctDelta(cur.total, prev.total) : null,
     activeUsers: cur.activeUsers,
-    activeUsersDelta: pctDelta(cur.activeUsers, prev.activeUsers),
+    activeUsersDelta: hasPrev ? pctDelta(cur.activeUsers, prev.activeUsers) : null,
     totalConnectedMs: cur.totalConnectedMs,
-    totalConnectedMsDelta: pctDelta(cur.totalConnectedMs, prev.totalConnectedMs),
+    totalConnectedMsDelta: hasPrev
+      ? pctDelta(cur.totalConnectedMs, prev.totalConnectedMs)
+      : null,
     connectRate: cur.connectRate,
-    connectRateDelta: (cur.connectRate - prev.connectRate) * 100,
+    connectRateDelta: hasPrev ? (cur.connectRate - prev.connectRate) * 100 : null,
     medianRingToAcceptMs: cur.medianRingToAcceptMs,
-    medianRingToAcceptDeltaMs:
-      cur.medianRingToAcceptMs - prev.medianRingToAcceptMs,
+    medianRingToAcceptDeltaMs: hasPrev
+      ? cur.medianRingToAcceptMs - prev.medianRingToAcceptMs
+      : null,
     medianDurationMs: cur.medianDurationMs,
-    medianDurationDeltaMs: cur.medianDurationMs - prev.medianDurationMs,
+    medianDurationDeltaMs: hasPrev
+      ? cur.medianDurationMs - prev.medianDurationMs
+      : null,
     abnormalEndRate: cur.abnormalEndRate,
-    abnormalEndRateDelta: (cur.abnormalEndRate - prev.abnormalEndRate) * 100,
+    abnormalEndRateDelta: hasPrev
+      ? (cur.abnormalEndRate - prev.abnormalEndRate) * 100
+      : null,
     reconnectsPer100: cur.reconnectsPer100,
-    reconnectsPer100Delta: cur.reconnectsPer100 - prev.reconnectsPer100,
+    reconnectsPer100Delta: hasPrev
+      ? cur.reconnectsPer100 - prev.reconnectsPer100
+      : null,
   };
 
   const dailyVolume = db

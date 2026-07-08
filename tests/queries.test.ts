@@ -191,6 +191,16 @@ describe("getMetrics — usage and health kpis", () => {
   });
 });
 
+describe("getMetrics — deltas", () => {
+  it("suppresses deltas when the previous window has no data", () => {
+    // fixture has nothing in the 7d window's preceding 7 days
+    const k = getMetrics(7).kpis;
+    expect(k.totalSessionsDelta).toBeNull();
+    expect(k.connectRateDelta).toBeNull();
+    expect(k.abnormalEndRateDelta).toBeNull();
+  });
+});
+
 describe("getMetrics — window filtering", () => {
   it("includes the 40-day-old session only in the 90d window", () => {
     expect(getMetrics(7).kpis.totalSessions).toBe(6);
