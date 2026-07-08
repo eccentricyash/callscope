@@ -19,8 +19,12 @@ export const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 `;
 
+// statically analyzable join — vercel's file tracer recognizes this exact
+// shape and ships ./data with every function that imports this module
+const DEFAULT_DB_PATH = path.join(process.cwd(), "data", "callscope.db");
+
 function dbPath(): string {
-  return process.env.DB_PATH ?? path.join(process.cwd(), "data", "callscope.db");
+  return process.env.DB_PATH ?? DEFAULT_DB_PATH;
 }
 
 let readDb: Database.Database | null = null;

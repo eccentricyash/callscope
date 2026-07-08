@@ -8,7 +8,8 @@ const nextConfig: NextConfig = {
   // so serverless deploys must be told to ship it
   outputFileTracingIncludes: {
     "/": ["./data/**"],
-    "/api/metrics": ["./data/**"],
+    "/**": ["./data/**"],
+    "/api/*": ["./data/**"],
   },
 };
 
