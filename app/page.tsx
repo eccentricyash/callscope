@@ -46,9 +46,41 @@ function SectionHeading({ title, note }: { title: string; note: string }) {
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; debug?: string }>;
 }) {
-  const { range } = await searchParams;
+  const { range, debug } = await searchParams;
+
+  // temporary: introspect this function's runtime while chasing a vercel 500
+  if (debug === "1") {
+    const fs = await import("fs");
+    const path = await import("path");
+    const dataDir = path.join(process.cwd(), "data");
+    let listing: string[];
+    try {
+      listing = fs.readdirSync(dataDir);
+    } catch (e) {
+      listing = [`readdir failed: ${String(e)}`];
+    }
+    let cwdListing: string[];
+    try {
+      cwdListing = fs.readdirSync(process.cwd());
+    } catch (e) {
+      cwdListing = [`readdir failed: ${String(e)}`];
+    }
+    let metricsResult: string;
+    try {
+      getMetrics(30);
+      metricsResult = "getMetrics OK";
+    } catch (e) {
+      metricsResult = e instanceof Error ? (e.stack ?? e.message) : String(e);
+    }
+    return (
+      <pre style={{ padding: 16, fontSize: 12, whiteSpace: "pre-wrap" }}>
+        {JSON.stringify({ cwd: process.cwd(), dataDir, listing, cwdListing, metricsResult }, null, 2)}
+      </pre>
+    );
+  }
+
   const rangeDays: RangeDays = range === "7" ? 7 : range === "90" ? 90 : 30;
   const m = getMetrics(rangeDays);
   const vs = `vs previous ${rangeDays} days`;
