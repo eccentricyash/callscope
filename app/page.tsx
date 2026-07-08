@@ -49,40 +49,39 @@ export default async function Home({
   searchParams: Promise<{ range?: string; debug?: string }>;
 }) {
   const { range, debug } = await searchParams;
-
-  // temporary: introspect this function's runtime while chasing a vercel 500
-  if (debug === "1") {
-    const fs = await import("fs");
-    const path = await import("path");
-    const dataDir = path.join(process.cwd(), "data");
-    let listing: string[];
-    try {
-      listing = fs.readdirSync(dataDir);
-    } catch (e) {
-      listing = [`readdir failed: ${String(e)}`];
-    }
-    let cwdListing: string[];
-    try {
-      cwdListing = fs.readdirSync(process.cwd());
-    } catch (e) {
-      cwdListing = [`readdir failed: ${String(e)}`];
-    }
-    let metricsResult: string;
-    try {
-      getMetrics(30);
-      metricsResult = "getMetrics OK";
-    } catch (e) {
-      metricsResult = e instanceof Error ? (e.stack ?? e.message) : String(e);
-    }
-    return (
-      <pre style={{ padding: 16, fontSize: 12, whiteSpace: "pre-wrap" }}>
-        {JSON.stringify({ cwd: process.cwd(), dataDir, listing, cwdListing, metricsResult }, null, 2)}
-      </pre>
-    );
-  }
-
   const rangeDays: RangeDays = range === "7" ? 7 : range === "90" ? 90 : 30;
   const m = getMetrics(rangeDays);
+
+  // temporary: render one component at a time while chasing a vercel-only 500
+  if (debug) {
+    const probes: Record<string, React.ReactNode> = {
+      data: <pre>{JSON.stringify(m.kpis, null, 2)}</pre>,
+      tile: (
+        <StatTile label="Sessions" value={fmtInt(m.kpis.totalSessions)} deltaCaption="test" />
+      ),
+      filter: <RangeFilter current={rangeDays} />,
+      card: (
+        <ChartCard title="t" subtitle="s" table={{ columns: ["a"], rows: [["b"]] }}>
+          <div>inner</div>
+        </ChartCard>
+      ),
+      volume: <DailyVolumeChart data={m.dailyVolume} />,
+      trend: <TrendChart data={m.dailyUsers} name="Active users" />,
+      hbar: (
+        <HBarChart
+          data={m.ringOutcomes.map((r) => ({ label: r.label, count: r.count }))}
+          seriesName="Sessions"
+        />
+      ),
+      hist: <LatencyHistogram data={m.latencyHistogram} />,
+    };
+    return (
+      <main style={{ padding: 16 }}>
+        <p>probe: {debug}</p>
+        {probes[debug] ?? <p>unknown probe</p>}
+      </main>
+    );
+  }
   const vs = `vs previous ${rangeDays} days`;
 
   const outcomes = m.ringOutcomes.map((r) => ({
