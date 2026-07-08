@@ -1,0 +1,3 @@
+{
+  "buildCommand": "npm run seed && npm run build"
+}
