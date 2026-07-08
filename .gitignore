@@ -20,6 +20,9 @@
 # production
 /build
 
+# local telemetry store (regenerate with `npm run seed`)
+/data/
+
 # misc
 .DS_Store
 *.pem
