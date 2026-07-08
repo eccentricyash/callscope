@@ -18,6 +18,7 @@ self-contained — clone, seed, run.
 npm install
 npm run seed   # generates data/callscope.db — ~6,400 sessions / ~26,000 events over 90 days
 npm run dev    # http://localhost:3000
+npm test       # known-answer tests for the SQL metrics + ingest validation
 ```
 
 ## The metrics, and why they exist
@@ -38,6 +39,7 @@ metrics are deliberately left out.
 ```mermaid
 flowchart LR
     G["Telemetry generator\n(scripts/seed.ts)"] -->|"session lifecycle events"| DB[("SQLite\nevents table")]
+    I["POST /api/events\n(zod-validated ingest)"] --> DB
     DB -->|"CTE pivots events → sessions,\naggregates per metric"| Q["lib/queries.ts"]
     Q --> API["GET /api/metrics"]
     Q --> P["Server-rendered dashboard\n(app/page.tsx)"]
@@ -54,6 +56,27 @@ flowchart LR
   friendly, zero client state. One filter row scopes every tile and chart, so
   the numbers always agree.
 - **`GET /api/metrics?range=30`** exposes the same aggregates as JSON.
+- **`POST /api/events`** ingests telemetry — a single event or a batch of up
+  to 1,000, validated against a zod schema before touching the store:
+
+  ```bash
+  curl -X POST http://localhost:3000/api/events \
+    -H "content-type: application/json" \
+    -d '{"session_id":"s_demo","event_type":"initiated","session_type":"call","platform":"android","ts":1751980000000}'
+  ```
+
+  Malformed input gets a 400 with per-field issues; on a read-only store
+  (the hosted demo) it returns 503 instead of failing silently.
+
+## Testing
+
+`npm test` runs two suites (vitest):
+
+- **Known-answer metric tests** — a hand-built fixture of seven sessions whose
+  connect rate, medians, outcome counts and histogram buckets are computable
+  on paper, asserted against the real SQL. Also covers time-window filtering.
+- **Ingest validation tests** — schema acceptance/rejection cases and payload
+  serialization.
 
 ## Synthetic data that behaves like real data
 
@@ -85,9 +108,15 @@ traffic rather than uniform noise:
 
 Next.js (App Router) · TypeScript · SQLite (better-sqlite3) · Tailwind CSS · Recharts
 
+## Deploying
+
+The repo ships a `vercel.json` that seeds the database at build time, and the
+Next config bundles it into the serverless functions. The hosted demo is
+therefore **read-only** — `POST /api/events` returns 503 there by design;
+run locally for the full ingest path.
+
 ## What I'd build next
 
-- An ingest endpoint (`POST /api/events`) so a real client can stream events in.
 - Platform and session-type dimension filters alongside the date range.
 - P95s next to medians (tail latency is where the pain lives), and
   reconnects-per-connected-minute as a network-quality series.
