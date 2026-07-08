@@ -23,16 +23,34 @@ npm test       # known-answer tests for the SQL metrics + ingest validation
 
 ## The metrics, and why they exist
 
-Every chart answers a question an on-call RTC engineer actually asks. Vanity
-metrics are deliberately left out.
+The dashboard is organized around the two questions an owner actually has,
+in this order. Vanity metrics are deliberately left out.
+
+### Are people using it?
+
+| Metric | Question it answers |
+|---|---|
+| **Active users** (+ per-day trend) | How many distinct people used the app, and is that number growing or shrinking vs the previous period? |
+| **Time in sessions** (+ per-day trend) | Total connected minutes — the truest engagement line. Session counts can grow while each session gets shorter; minutes don't lie. |
+| **Sessions per day by type** | Baseline usage and mix. You can't judge an anomaly without knowing the normal shape (weekday peaks, weekend troughs). |
+| **Median session length** | Are conversations substantive or are people bailing early? |
+
+### What's breaking?
 
 | Metric | Question it answers |
 |---|---|
 | **Connect success rate** | Of everything users tried to start, how much actually connected? The single best health number — a drop here means push delivery, signaling or token problems. |
+| **Abnormal end rate** | Of sessions that connected, how many died from something other than a hang-up? This is the release-health canary. |
+| **Reconnects per 100 sessions** | Mid-call network churn — rising reconnects predict complaints before drop rates move. |
 | **Median ring → accept latency** | How long do callees take to pick up? A rising median often isn't user behavior — it's late ring delivery (dead push tokens, throttled background processes). |
 | **Ring outcomes** | `No answer` vs `Missed (unreachable)` are different failures: the first rang and was ignored; the second means *no device ever rang* — the classic silent-delivery bug. Tracking them separately is the point. |
-| **Session end reasons** | A hang-up is normal; `network_lost`, `app_killed`, `token_expired`, `server_error` are reliability regressions. This chart is a release-health canary. |
-| **Sessions per day by type** | Baseline usage and mix. You can't judge an anomaly without knowing the normal shape (weekday peaks, weekend troughs). |
+| **Session end reasons** | A hang-up is normal; `network_lost`, `app_killed`, `token_expired`, `server_error` are reliability regressions. |
+
+**Scope honesty:** call telemetry can only explain friction *inside* the app —
+failed connects, unreachable devices, drops. Users who churn without ever
+starting a call are invisible here; answering "why did they stop opening the
+app?" needs product analytics (app-open events, retention cohorts), which is a
+different pipeline.
 
 ## Architecture
 
@@ -47,7 +65,7 @@ flowchart LR
 ```
 
 - **Event-sourced storage.** One append-only `events` table
-  (`session_id, event_type, session_type, platform, ts, payload`). A SQL CTE
+  (`session_id, user_id, event_type, session_type, platform, ts, payload`). A SQL CTE
   pivots events into one row per session; every metric aggregates over that.
   New metrics need a new query, never a schema migration or a backfill.
 - **Server components query SQLite directly** (better-sqlite3, read-only
@@ -62,7 +80,7 @@ flowchart LR
   ```bash
   curl -X POST http://localhost:3000/api/events \
     -H "content-type: application/json" \
-    -d '{"session_id":"s_demo","event_type":"initiated","session_type":"call","platform":"android","ts":1751980000000}'
+    -d '{"session_id":"s_demo","user_id":"u_demo","event_type":"initiated","session_type":"call","platform":"android","ts":1751980000000}'
   ```
 
   Malformed input gets a 400 with per-field issues; on a read-only store
@@ -85,6 +103,8 @@ traffic rather than uniform noise:
 
 - weekday/weekend volume difference, morning + evening diurnal peaks, and a
   slight growth trend across the 90-day window;
+- a simulated user base with a long tail of light users, a few heavy ones,
+  and sign-ups spread over time — so the active-users trend actually trends;
 - lognormal ring→accept latency and per-type session durations (meets run
   long, calls run short);
 - meets are *joined*, not rung — they skip the ring lifecycle entirely;
