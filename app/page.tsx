@@ -153,7 +153,7 @@ export default async function Home({
             rows: m.dailyUsers.map((d) => [shortDay(d.day), d.value]),
           }}
         >
-          <TrendChart data={m.dailyUsers} name="Active users" valueFormatter={fmtInt} />
+          <TrendChart data={m.dailyUsers} name="Active users" />
         </ChartCard>
 
         <ChartCard
@@ -167,7 +167,7 @@ export default async function Home({
           <TrendChart
             data={m.dailyMinutes.map((d) => ({ ...d, value: Math.round(d.value) }))}
             name="Minutes"
-            valueFormatter={(v) => `${fmtInt(v)} min`}
+            unit="minutes"
           />
         </ChartCard>
 

@@ -10,17 +10,25 @@ import {
   YAxis,
 } from "recharts";
 import type { DailyValueRow } from "@/lib/queries";
-import { shortDay } from "@/lib/format";
+import { fmtInt, shortDay } from "@/lib/format";
 import VizTooltip from "./VizTooltip";
 
 interface TrendChartProps {
   data: DailyValueRow[];
   name: string;
-  valueFormatter?: (v: number) => string;
+  /** plain string, not a formatter function — functions can't cross the
+   *  server→client component boundary */
+  unit?: "count" | "minutes";
 }
 
+const FORMATTERS: Record<string, (v: number) => string> = {
+  count: fmtInt,
+  minutes: (v) => `${fmtInt(v)} min`,
+};
+
 /** Single-series daily trend: 2px line over a 10% wash. */
-export default function TrendChart({ data, name, valueFormatter }: TrendChartProps) {
+export default function TrendChart({ data, name, unit = "count" }: TrendChartProps) {
+  const valueFormatter = FORMATTERS[unit];
   return (
     <div className="h-52">
       <ResponsiveContainer width="100%" height="100%">
